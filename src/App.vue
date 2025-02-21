@@ -1,5 +1,4 @@
 <template>
-  <!-- viewBox розширено, щоб у фінальному стані усі полігони були видимі -->
   <svg :width="svgSize" :height="svgSize" viewBox="-400 -400 1600 1600">
     <polygon
       v-for="(cell, index) in computedPolygons"
@@ -28,16 +27,15 @@ interface Point {
 }
 
 interface PolygonCell {
-  points: Point[]; // Вершини полігона (у порядку обходу)
-  centroid: Point; // Центроїд полігона
-  color: string; // Випадковий колір полігона
-  // Флаг, що вказує, чи має полігон хоча б одну вершину на межах початкового квадрата
+  points: Point[];
+  centroid: Point;
+  color: string;
   isOuter: boolean;
 }
 
 interface SplitChoice {
-  index: number; // Індекс ребра (ребро між poly[index] та poly[(index+1)%n])
-  t: number; // Параметр [0,1] для визначення точки на ребрі
+  index: number;
+  t: number;
 }
 
 function getRandomColor(): string {
@@ -108,14 +106,12 @@ function splitPolygon(
 }
 function generateSplitPolygons(numSplits: number, size: number): PolygonCell[] {
   const polygons: PolygonCell[] = [];
-  // Початковий квадрат від (0,0) до (size,size)
   const initial: Point[] = [
     { x: 0, y: 0 },
     { x: size, y: 0 },
     { x: size, y: size },
     { x: 0, y: size },
   ];
-  // Перевірка, чи містить квадрат вершину на межі (очевидно, так)
   const isOuter = initial.some(
     (pt) =>
       pt.x <= 0.001 ||
@@ -155,7 +151,6 @@ function generateSplitPolygons(numSplits: number, size: number): PolygonCell[] {
 
     const [poly1, poly2] = splitPolygon(poly, split1, split2);
 
-    // Для кожного нового полігона обчислюємо центроїд та прапорець outer
     const computeOuter = (points: Point[]) =>
       points.some(
         (pt) =>
@@ -187,37 +182,27 @@ export default defineComponent({
   setup() {
     const svgSize = 800;
     const center = { x: svgSize / 2, y: svgSize / 2 };
-    const staticDuration = 1000; // 1 секунда – статичне відображення
-    const separationDuration = 4000; // 4 секунди – анімація віддалення
+    const staticDuration = 1000;
+    const separationDuration = 4000;
     const totalCycle = staticDuration + separationDuration;
-    const maxSeparation = 400; // Базовий зсув для полігонів, що лежать по ребру
+    const maxSeparation = 400;
 
     const polygonCells = ref<PolygonCell[]>(generateSplitPolygons(15, svgSize));
-    // currentSeparation змінюється від 0 до maxSeparation (анімуємо за допомогою sin)
     const currentSeparation = ref(0);
 
-    /*
-      Для кожного полігона:
-      - Якщо полігон внутрішній, застосовуємо зсув, обчислений за його центроїдом.
-      - Якщо полігон зовнішній (має хоча б одну вершину на краю початкового квадрата),
-        обчислюємо додатковий множник, щоб крайня вершина в напрямку руху досягла своєї цільової позиції (center + 2*(v - center)).
-    */
     const computedPolygons = computed(() => {
       return polygonCells.value.map((cell) => {
-        // Обчислюємо напрямок зсуву – від центру до центроїда
         const dx = cell.centroid.x - center.x;
         const dy = cell.centroid.y - center.y;
         const dLen = Math.hypot(dx, dy) || 1;
         const dUnit = { x: dx / dLen, y: dy / dLen };
 
-        // Обчислюємо максимальне значення (v - center)·dUnit для всіх вершин
         let R_max = 0;
         cell.points.forEach((v) => {
           const dot = (v.x - center.x) * dUnit.x + (v.y - center.y) * dUnit.y;
           if (dot > R_max) R_max = dot;
         });
 
-        // Зсув пропорційний: коли currentSeparation == maxSeparation, зсув дорівнює R_max.
         const translationMagnitude =
           R_max * (currentSeparation.value / maxSeparation);
         const translation = {
@@ -225,7 +210,6 @@ export default defineComponent({
           y: dUnit.y * translationMagnitude,
         };
 
-        // Зсуваємо кожну вершину полігона
         const transformedPoints = cell.points.map((v) => ({
           x: v.x + translation.x,
           y: v.y + translation.y,
@@ -246,13 +230,11 @@ export default defineComponent({
       if (elapsed > staticDuration) {
         let progress = (elapsed - staticDuration) / separationDuration;
         if (progress > 1) progress = 1;
-        // Використовуємо синусоїдальне згладжування
         currentSeparation.value = maxSeparation * Math.sin(Math.PI * progress);
       } else {
         currentSeparation.value = 0;
       }
       if (elapsed >= totalCycle) {
-        // Після завершення циклу генеруємо нове розділення полігонів
         polygonCells.value = generateSplitPolygons(15, svgSize);
         startTime = timestamp;
       }
